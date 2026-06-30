@@ -5,6 +5,7 @@ import {
   StyleSheet, Platform
 } from 'react-native';
 import Animated, { FadeInDown, FadeOutLeft } from 'react-native-reanimated';
+import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -115,7 +116,6 @@ export default function Home() {
           onChangeText={setInputValue}
           onSubmitEditing={handleAdd}
         />
-        {/* Date picker trigger */}
         <TouchableOpacity
           style={[s.iconBtn, s.dateBtn, dueDate && s.dateBtnActive]}
           onPress={() => setShowPicker(true)}
@@ -169,41 +169,54 @@ export default function Home() {
           </View>
         }
         renderItem={({ item }) => (
-          <Animated.View
-            entering={FadeInDown.springify()}
-            exiting={FadeOutLeft.springify()}
-            style={s.taskItem}
+          <Swipeable
+            renderRightActions={() => (
+              <TouchableOpacity
+                style={s.swipeDelete}
+                onPress={() => handleDelete(item.id)}
+              >
+                <Ionicons name="trash" size={22} color="#fff" />
+              </TouchableOpacity>
+            )}
+            overshootRight={false}
+            rightThreshold={40}
           >
-            <TouchableOpacity
-              onPress={() => handleToggle(item.id)}
-              style={s.checkbox}
+            <Animated.View
+              entering={FadeInDown.springify()}
+              exiting={FadeOutLeft.springify()}
+              style={s.taskItem}
             >
-              <Ionicons name="ellipse-outline" size={24} color={theme.primary} />
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleToggle(item.id)}
+                style={s.checkbox}
+              >
+                <Ionicons name="ellipse-outline" size={24} color={theme.primary} />
+              </TouchableOpacity>
 
-            <View style={s.taskContent}>
-              <Text style={s.taskText}>{item.text}</Text>
-              {item.dueDate && (
-                <View style={s.dueDateRow}>
-                  <Ionicons
-                    name="time-outline"
-                    size={12}
-                    color={isOverdue(item.dueDate) ? '#FF3B30' : theme.subtext}
-                  />
-                  <Text style={[
-                    s.dueDateText,
-                    isOverdue(item.dueDate) && s.overdue
-                  ]}>
-                    {formatDate(item.dueDate)}
-                  </Text>
-                </View>
-              )}
-            </View>
+              <View style={s.taskContent}>
+                <Text style={s.taskText}>{item.text}</Text>
+                {item.dueDate && (
+                  <View style={s.dueDateRow}>
+                    <Ionicons
+                      name="time-outline"
+                      size={12}
+                      color={isOverdue(item.dueDate) ? '#FF3B30' : theme.subtext}
+                    />
+                    <Text style={[
+                      s.dueDateText,
+                      isOverdue(item.dueDate) && s.overdue
+                    ]}>
+                      {formatDate(item.dueDate)}
+                    </Text>
+                  </View>
+                )}
+              </View>
 
-            <TouchableOpacity onPress={() => handleDelete(item.id)}>
-              <Ionicons name="trash-outline" size={20} color={theme.subtext} />
-            </TouchableOpacity>
-          </Animated.View>
+              <TouchableOpacity onPress={() => handleDelete(item.id)}>
+                <Ionicons name="trash-outline" size={20} color={theme.subtext} />
+              </TouchableOpacity>
+            </Animated.View>
+          </Swipeable>
         )}
       />
 
@@ -377,6 +390,15 @@ const makeStyles = (theme) => StyleSheet.create({
   },
   overdue: {
     color: '#FF3B30',
+  },
+  swipeDelete: {
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 12,
+    marginBottom: 12,
+    marginLeft: 8,
   },
   emptyState: {
     alignItems: 'center',
