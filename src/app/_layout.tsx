@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
+import { requestNotificationPermission, scheduleTaskReminders, cancelTaskReminders } from '../utils/notifications';
 
 export const TasksContext = createContext(null);
 export const useTasks = () => useContext(TasksContext);
@@ -34,32 +36,55 @@ export default function RootLayout() {
 
   const theme = isDark ? darkTheme : lightTheme;
 
+  // Check for OTA updates on app start
+  useEffect(() => {
+    const checkForUpdate = async () => {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch (e) {
+        console.log('Error checking for update:', e);
+      }
+    };
+    checkForUpdate();
+  }, []);
+
+  // Request notification permission on app start
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
+
+  // Load tasks and theme from storage
   useEffect(() => {
     const loadData = async () => {
       try {
         const saved = await AsyncStorage.getItem('tasks');
         const savedTheme = await AsyncStorage.getItem('isDark');
-        if (saved) setTasks(JSON.parse(saved));
-        else setTasks([
-          { id: 1, text: 'Design the home screen', done: false },
-          { id: 2, text: 'Build SureLink navbar', done: false },
-          { id: 3, text: 'Set up Expo project', done: true },
-        ]);
+        if (saved) {
+          setTasks(JSON.parse(saved));
+        } else {
+          setTasks([
+            { id: 1, text: 'Design the home screen', done: false, dueDate: null },
+            { id: 2, text: 'Build SureLink navbar', done: false, dueDate: null },
+            { id: 3, text: 'Set up Expo project', done: true, dueDate: null },
+          ]);
+        }
         if (savedTheme) setIsDark(JSON.parse(savedTheme));
       } catch (e) {
         setTasks([
-  { id: 1, text: 'Design the home screen', done: false, dueDate: null },
-  { id: 2, text: 'Build SureLink navbar', done: false, dueDate: null },
-  { id: 3, text: 'Set up Expo project', done: true, dueDate: null },
-]);
-const addTask = (text, dueDate = null) => {
-  setTasks(prev => [...prev, { id: Date.now(), text, done: false, dueDate }]);
-};
+          { id: 1, text: 'Design the home screen', done: false, dueDate: null },
+          { id: 2, text: 'Build SureLink navbar', done: false, dueDate: null },
+          { id: 3, text: 'Set up Expo project', done: true, dueDate: null },
+        ]);
       }
     };
     loadData();
   }, []);
 
+  // Save tasks whenever they change
   useEffect(() => {
     const saveTasks = async () => {
       try {
@@ -77,21 +102,38 @@ const addTask = (text, dueDate = null) => {
     await AsyncStorage.setItem('isDark', JSON.stringify(newVal));
   };
 
-  const addTask = (text) => {
-    setTasks(prev => [...prev, { id: Date.now(), text, done: false }]);
+  const addTask = async (text, dueDate = null) => {
+    const id = Date.now();
+    let notificationIds = [];
+
+    if (dueDate) {
+      notificationIds = await scheduleTaskReminders(id, text, dueDate);
+    }
+
+    setTasks(prev => [...prev, { id, text, done: false, dueDate, notificationIds }]);
   };
 
-  const toggleTask = (id) => {
-    setTasks(prev => prev.map(task =>
-      task.id === id ? { ...task, done: !task.done } : task
+  const toggleTask = async (id) => {
+    const task = tasks.find(t => t.id === id);
+    if (task && !task.done && task.notificationIds) {
+      await cancelTaskReminders(task.notificationIds);
+    }
+    setTasks(prev => prev.map(t =>
+      t.id === id ? { ...t, done: !t.done } : t
     ));
   };
 
-  const deleteTask = (id) => {
+  const deleteTask = async (id) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
+
+    if (task.notificationIds) {
+      await cancelTaskReminders(task.notificationIds);
+    }
+
     setTasks(prev => prev.filter(t => t.id !== id));
     setDeletedTask(task);
+
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       setDeletedTask(null);
